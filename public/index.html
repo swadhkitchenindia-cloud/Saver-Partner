@@ -14,6 +14,34 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script>
+      // Recovery script: if an older/broken service worker is controlling the page,
+      // the app bundle may never load. This runs before the React bundle and clears it once.
+      (function () {
+        try {
+          if (!('serviceWorker' in navigator)) return;
+          if (localStorage.getItem('sp_sw_recovery_done') === '1') return;
+
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            if (!regs || regs.length === 0) return;
+
+            return Promise.all(regs.map(function (r) { return r.unregister(); }))
+              .then(function () {
+                if (!('caches' in window)) return;
+                return caches.keys().then(function (keys) {
+                  return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                });
+              })
+              .then(function () {
+                localStorage.setItem('sp_sw_recovery_done', '1');
+                window.location.reload();
+              });
+          });
+        } catch (e) {
+          // If anything goes wrong here, don't block the app from loading.
+        }
+      })();
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
