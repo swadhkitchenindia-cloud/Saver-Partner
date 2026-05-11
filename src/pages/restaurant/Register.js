@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../components/AuthContext';
-import { db, auth } from '../../firebase/config';
-import { doc, updateDoc } from 'firebase/firestore';
+import { auth } from '../../firebase/config';
+// firestore import removed — writes handled in AuthContext
 import { signOut } from 'firebase/auth';
 import { getUserLocation, reverseGeocode, forwardGeocode } from '../../firebase/location';
 
@@ -81,25 +81,43 @@ export default function RestaurantRegister() {
     if (!validateFSSAI(form.fssaiNumber)) return setErr('FSSAI number must be exactly 14 digits');
     if (!form.fssaiExpiry) return setErr('FSSAI expiry date is required');
     if (!form.ownerName || !form.ownerPhone) return setErr('Owner name and phone are required');
-    setErr(''); setLoading(true);
+    setErr('');
+    setLoading(true);
     try {
-      const cred = await registerRestaurant(form.email, form.password, form.businessName, form.location, form.address, form.phone);
-      await updateDoc(doc(db, 'users', cred.user.uid), {
+      // Build the complete data object BEFORE creating the account
+      const fullData = {
+        role: 'restaurant',
+        businessName: form.businessName,
         businessType: form.businessType,
-        lat: coords.lat,
-        lng: coords.lng,
-        fssaiNumber: form.fssaiNumber.replace(/\s/g, ''),
-        fssaiExpiry: form.fssaiExpiry,
+        location: form.location,
+        address: form.address,
+        phone: form.phone,
         ownerName: form.ownerName,
         ownerPhone: form.ownerPhone,
-        description: form.description,
+        fssaiNumber: form.fssaiNumber.replace(/\s/g, ''),
+        fssaiExpiry: form.fssaiExpiry,
+        description: form.description || '',
+        lat: coords?.lat || null,
+        lng: coords?.lng || null,
         verificationStatus: 'pending',
         canList: false,
-      });
+      };
+
+      // Single atomic call — creates auth user AND writes all Firestore data together
+      await registerRestaurant(form.email, form.password, fullData);
+
+      // Only sign out AFTER confirmed write — then show success screen
       await signOut(auth);
       setStep(3);
     } catch (e) {
-      setErr(e.message?.includes('email-already-in-use') ? 'This email is already registered.' : 'Registration failed. Please try again.');
+      console.error('Registration error:', e);
+      if (e.message?.includes('email-already-in-use')) {
+        setErr('This email is already registered. Please sign in instead.');
+      } else if (e.message?.includes('network') || e.message?.includes('offline')) {
+        setErr('Network error. Please check your connection and try again.');
+      } else {
+        setErr('Registration failed: ' + (e.message || 'Please try again.'));
+      }
     }
     setLoading(false);
   };
@@ -230,7 +248,19 @@ export default function RestaurantRegister() {
           <div style={{ background: 'var(--green-bg)', borderRadius: 10, padding: '10px 13px', marginBottom: 14, fontSize: 12, color: 'var(--green-dark)', lineHeight: 1.6 }}>
             By submitting you confirm all information is accurate and your FSSAI license is valid.
           </div>
-          <button className="btn-green" type="submit" disabled={loading}>{loading ? 'Submitting...' : 'Submit for verification ✓'}</button>
+          <button className="btn-green" type="submit" disabled={loading} style={{ position: 'relative' }}>
+            {loading ? (
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                <span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block', flexShrink: 0 }} />
+                Submitting your application...
+              </span>
+            ) : 'Submit for verification ✓'}
+          </button>
+          {loading && (
+            <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>
+              Please wait — saving your details securely...
+            </div>
+          )}
           <button type="button" className="btn-outline" style={{ marginTop: 10 }} onClick={() => setStep(1)}>← Back</button>
         </form>
       )}

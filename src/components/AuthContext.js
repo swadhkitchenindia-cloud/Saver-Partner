@@ -85,25 +85,19 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Restaurant email registration (restaurants still use email)
-  const registerRestaurant = async (email, password, businessName, location, address, phone) => {
+  // Restaurant registration — one atomic setDoc with all fields
+  // Accepts full data object so no separate updateDoc is needed
+  const registerRestaurant = async (email, password, fullData) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    const data = {
-      role: 'restaurant',
-      businessName,
-      location,
-      address: address || location,
-      phone: phone || '',
+    await setDoc(doc(db, 'users', cred.user.uid), {
+      ...fullData,
       email,
       createdAt: Date.now(),
       rating: 0,
       totalOrders: 0,
       imageUrl: '',
-      lat: null,
-      lng: null,
-    };
-    await setDoc(doc(db, 'users', cred.user.uid), data);
-    setProfile(data);
+    });
+    // Note: we do NOT setProfile here — signOut fires right after in Register.js
     return cred;
   };
 
