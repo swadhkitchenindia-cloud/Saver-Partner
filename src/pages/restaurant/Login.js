@@ -14,10 +14,17 @@ export default function RestaurantLogin() {
     e.preventDefault();
     setErr(''); setLoading(true);
     try {
-      await loginRestaurant(email, pass);
+      const normalizedEmail = (email || '').trim().toLowerCase();
+      await loginRestaurant(normalizedEmail, pass);
       nav('/dashboard');
-    } catch {
-      setErr('Invalid email or password. Please try again.');
+    } catch (e) {
+      // Keep the UI message friendly, but include the real auth code for debugging.
+      const code = e?.code || '';
+      if (code === 'auth/user-not-found') setErr('No account found for this email. Please register first.');
+      else if (code === 'auth/wrong-password') setErr('Incorrect password. Please try again.');
+      else if (code === 'auth/invalid-login-credentials') setErr('Invalid email or password. Please try again.');
+      else if (code === 'auth/too-many-requests') setErr('Too many attempts. Please wait a bit and try again.');
+      else setErr('Sign-in failed' + (code ? ` (${code})` : '') + '. Please try again.');
     }
     setLoading(false);
   };

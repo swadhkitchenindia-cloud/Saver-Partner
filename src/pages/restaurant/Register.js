@@ -84,6 +84,8 @@ export default function RestaurantRegister() {
     setErr('');
     setLoading(true);
     try {
+      const normalizedEmail = (form.email || '').trim().toLowerCase();
+
       // Build the complete data object BEFORE creating the account
       const fullData = {
         role: 'restaurant',
@@ -104,19 +106,26 @@ export default function RestaurantRegister() {
       };
 
       // Single atomic call — creates auth user AND writes all Firestore data together
-      await registerRestaurant(form.email, form.password, fullData);
+      await registerRestaurant(normalizedEmail, form.password, fullData);
 
       // Only sign out AFTER confirmed write — then show success screen
       await signOut(auth);
       setStep(3);
     } catch (e) {
-      console.error('Registration error:', e);
-      if (e.message?.includes('email-already-in-use')) {
+      console.error('Registration error:', e?.code, e);
+      const code = e?.code || '';
+      if (code === 'auth/email-already-in-use') {
         setErr('This email is already registered. Please sign in instead.');
-      } else if (e.message?.includes('network') || e.message?.includes('offline')) {
+      } else if (code === 'auth/operation-not-allowed') {
+        setErr('Email/password sign-in is disabled in Firebase Auth for this project.');
+      } else if (code === 'auth/invalid-email') {
+        setErr('Please enter a valid email address.');
+      } else if (code === 'auth/weak-password') {
+        setErr('Password is too weak. Please use at least 6 characters.');
+      } else if (code === 'auth/network-request-failed') {
         setErr('Network error. Please check your connection and try again.');
       } else {
-        setErr('Registration failed: ' + (e.message || 'Please try again.'));
+        setErr('Registration failed' + (code ? ` (${code})` : '') + ': ' + (e?.message || 'Please try again.'));
       }
     }
     setLoading(false);
